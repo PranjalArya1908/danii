@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     monitor_interval_s: int = 5
     demo_open_police: bool = True
     seed_on_start: bool = True
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_whatsapp_from_number: str = "+14155238886"
+    twilio_enabled: bool = False
+    twilio_whatsapp_enabled: bool = True
+    public_track_base_url: str = "http://localhost:8000/api/v1/public/track"
 
     @property
     def cors_origin_list(self) -> list[str]:

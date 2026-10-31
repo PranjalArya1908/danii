@@ -174,21 +174,45 @@ class SheMoveStore:
         self.audit = self.audit[:500]
 
     def _notify_contacts(self, trip: dict, channel: str, message: str, kind: str) -> None:
+        from app.twilio_service import send_sms, send_whatsapp, build_alert_message
+
+        sms_body = build_alert_message(
+            traveller_name=trip.get("traveller_name", "Traveller"),
+            kind=kind,
+            share_token=trip.get("share_token", ""),
+            location=trip.get("last_location"),
+            custom_reason=message if kind not in {"JOURNEY_STARTED", "SAFE_ARRIVAL"} else None,
+        )
+
         for contact in trip.get("contacts") or []:
+            phone = contact.get("phone")
+            status = "SENT"
+            if phone:
+                # Send WhatsApp (if enabled for this contact, defaults to True)
+                wa_ok = False
+                if contact.get("notify_whatsapp", True):
+                    wa_ok = send_whatsapp(phone, sms_body)
+                    contact["whatsappStatus"] = "SENT" if wa_ok else "FAILED"
+
+                # Also send SMS
+                sms_ok = send_sms(phone, sms_body)
+                contact["smsStatus"] = "SENT" if sms_ok else "FAILED"
+
+                status = "SENT" if (wa_ok or sms_ok) else "FAILED"
+
             record = {
                 "id": f"ntf-{secrets.token_hex(4)}",
                 "trip_id": trip["id"],
                 "contact_id": contact.get("id"),
                 "contact_name": contact.get("name"),
-                "channel": channel,
+                "channel": "whatsapp+sms" if contact.get("notify_whatsapp", True) else channel,
                 "kind": kind,
-                "message": message,
-                "status": "SENT",
+                "message": sms_body,
+                "status": status,
                 "acknowledged": False,
                 "created_at": iso(),
             }
             self.notifications.insert(0, record)
-            contact["smsStatus"] = "SENT"
         self._audit("system", "NOTIFY", message, {"trip_id": trip["id"], "kind": kind})
 
     def get_stations(self) -> list[dict]:
